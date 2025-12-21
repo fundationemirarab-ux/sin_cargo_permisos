@@ -19,6 +19,15 @@ from dotenv import load_dotenv
 
 load_dotenv() # Cargar variables de entorno del archivo .env
 
+# --- Lógica para despliegue en Render ---
+# Render no soporta archivos JSON de secretos directamente.
+# La solución es guardar el contenido de credentials.json en una variable de entorno.
+# Este código crea el archivo credentials.json a partir de esa variable de entorno si existe.
+if 'GOOGLE_CREDENTIALS' in os.environ:
+    creds_content = os.environ['GOOGLE_CREDENTIALS']
+    with open('credentials.json', 'w') as f:
+        f.write(creds_content)
+
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN ---
