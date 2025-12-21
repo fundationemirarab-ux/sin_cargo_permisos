@@ -1,0 +1,21 @@
+# Credenciales y Tokens - ¡NO SUBIR A GITHUB!
+credentials.json
+token.json
+
+# Entorno virtual de Python
+venv/
+*.venv
+env/
+
+# Archivos de cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Directorio del IDE
+.idea/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
