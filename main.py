@@ -47,16 +47,36 @@ DRIVE_FOLDER_ID = '1ljOYPhde0Uu9_0l9ToPF8xP4ck2u-3ee'
 def get_google_services():
     """Autentica con las APIs de Google y devuelve un diccionario de servicios."""
     creds = None
-    if os.path.exists(TOKEN_PATH):
+    
+    # Intenta cargar desde GOOGLE_TOKEN environment variable (para despliegues en la nube)
+    if 'GOOGLE_TOKEN' in os.environ:
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN']), SCOPES)
+        except Exception as e:
+            print(f"Error al cargar GOOGLE_TOKEN desde variable de entorno: {e}")
+            creds = None # Forzar re-auth si el env var token es malo
+
+    # Si no se cargó desde GOOGLE_TOKEN, intenta cargar desde token.json local
+    if not creds and os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    # Si no hay credenciales (válidas), permite que el usuario inicie sesión.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, 'w') as token:
-            token.write(creds.to_json())
+            # Solo si no estamos en Render (o no hay GOOGLE_TOKEN), iniciamos el flujo local
+            if 'GOOGLE_TOKEN' not in os.environ:
+                flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
+                creds = flow.run_local_server(port=0)
+            else:
+                # Si estamos en Render y GOOGLE_TOKEN no era válido, no podemos hacer flujo local
+                raise Exception("GOOGLE_TOKEN inválido o expirado en Render, y no se puede autenticar interactivamente.")
+        
+        # Guardar las credenciales en token.json solo si no estamos usando GOOGLE_TOKEN en el entorno
+        if 'GOOGLE_TOKEN' not in os.environ:
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
     
     try:
         sheets_service = build('sheets', 'v4', credentials=creds)
