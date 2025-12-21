@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Permiso de Pesca Sin Cargo - Fauna NQN</title>
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --secondary-color: #6c757d;
+            --light-gray: #f8f9fa;
+            --border-color: #dee2e6;
+            --font-family-sans-serif: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        body { 
+            font-family: var(--font-family-sans-serif);
+            margin: 0;
+            background-color: #f4f7f9;
+            color: #212529;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 2em auto;
+            padding: 2em;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            font-size: 1.75em; 
+            color: #343a40;
+            font-weight: 600;
+            margin-bottom: 1em;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            font-size: 13px; 
+            border: 1px solid var(--border-color);
+        }
+        th, td { 
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75em 1em; 
+            text-align: left; 
+            vertical-align: middle; 
+        }
+        th { 
+            background-color: var(--light-gray);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        tbody tr:hover {
+            background-color: #f1f3f5;
+        }
+        .action-cell { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .action-btn, .download-link, .page-btn {
+            font-family: inherit;
+            padding: 0.3em 0.8em; 
+            cursor: pointer; 
+            text-decoration: none;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+        }
+        #refresh-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        #refresh-btn:hover { background-color: #0b5ed7; }
+
+        .action-btn { background-color: #fff; color: var(--secondary-color); }
+        .action-btn:hover { background-color: #e9ecef; }
+        .action-btn:disabled { background-color: #e9ecef; color: #adb5bd; cursor: not-allowed; }
+
+        .download-link { color: var(--primary-color); background-color: transparent; border-color: transparent; padding: 0; }
+        .download-link:hover { text-decoration: underline; }
+
+        .status-sent { color: #198754; font-weight: 600; }
+
+        #pagination-controls { margin-top: 1em; text-align: center; }
+        .page-btn { background-color: #fff; }
+        .page-btn:hover:not(:disabled) { background-color: #e9ecef; }
+        .page-btn.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .page-btn:disabled { color: var(--secondary-color); cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Permiso de Pesca Sin Cargo - Fauna NQN</h1>
+        <button id="refresh-btn" class="action-btn">Refrescar Datos</button>
+        
+        <table style="margin-top: 1em;">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Foto 1</th>
+                    <th>Foto 2</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="sheet-data">
+                <!-- Los datos de la hoja de cálculo se cargarán aquí dinámicamente -->
+            </tbody>
+        </table>
+
+        <div id="pagination-controls"></div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSheetData(currentPage);
+            document.getElementById('refresh-btn').addEventListener('click', () => fetchSheetData(1));
+        });
+
+        async function fetchSheetData(page = 1) {
+            currentPage = page;
+            const dataBody = document.getElementById('sheet-data');
+            dataBody.innerHTML = '<tr><td colspan="6">Cargando datos...</td></tr>';
+            
+            try {
+                const response = await fetch(`/api/get-sheet-data?page=${page}`);
+                const data = await response.json();
+                
+                dataBody.innerHTML = ''; // Limpiar la tabla
+
+                if (data.records.length === 0) {
+                    dataBody.innerHTML = '<tr><td colspan="6">No se encontraron datos para esta página.</td></tr>';
+                    renderPagination(0, 1);
+                    return;
+                }
+                
+                data.records.forEach(record => {
+                    const row = dataBody.insertRow();
+                    
+                    row.insertCell().textContent = `${record.nombre} ${record.apellido}`;
+                    row.insertCell().textContent = record.email;
+                    
+                    const cellFoto1 = row.insertCell();
+                    cellFoto1.innerHTML = `<a href="${record.foto1}" target="_blank">Ver Foto 1</a>`;
+                    
+                    const cellFoto2 = row.insertCell();
+                    cellFoto2.innerHTML = `<a href="${record.foto2}" target="_blank">Ver Foto 2</a>`;
+                    
+                    const cellStatus = row.insertCell();
+                    cellStatus.textContent = record.status;
+                    if (record.status.toLowerCase() === 'enviado') {
+                        cellStatus.classList.add('status-sent');
+                    }
+
+                    const cellAction = row.insertCell();
+                    cellAction.classList.add('action-cell');
+
+                    const sendButton = document.createElement('button');
+                    sendButton.textContent = 'Enviar Email';
+                    sendButton.classList.add('action-btn');
+                    sendButton.id = `send-btn-${record.row_index}`;
+                    
+                    const downloadLink = document.createElement('a');
+                    downloadLink.textContent = 'Descargar PDF';
+                    downloadLink.classList.add('download-link');
+                    const nombreEncoded = encodeURIComponent(record.nombre);
+                    const apellidoEncoded = encodeURIComponent(record.apellido);
+                    downloadLink.href = `/api/download-pdf-by-name/${nombreEncoded}/${apellidoEncoded}`;
+                    downloadLink.download = `Permiso_${record.nombre}_${record.apellido}.pdf`;
+
+                    if (record.status.toLowerCase() === 'enviado') {
+                        sendButton.disabled = true;
+                    } else {
+                        sendButton.onclick = () => sendEmail(record);
+                    }
+                    cellAction.appendChild(sendButton);
+                    cellAction.appendChild(downloadLink);
+                });
+
+                renderPagination(data.total_pages, data.current_page);
+
+            } catch (error) {
+                console.error('Error al obtener datos de la hoja:', error);
+                dataBody.innerHTML = `<tr><td colspan="6">Error al cargar datos: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderPagination(totalPages, currentPage) {
+            const paginationControls = document.getElementById('pagination-controls');
+            paginationControls.innerHTML = '';
+
+            if (totalPages <= 1) return;
+
+            const prevButton = document.createElement('button');
+            prevButton.textContent = 'Anterior';
+            prevButton.classList.add('page-btn');
+            prevButton.disabled = currentPage === 1;
+            prevButton.onclick = () => fetchSheetData(currentPage - 1);
+            paginationControls.appendChild(prevButton);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i;
+                pageButton.classList.add('page-btn');
+                if (i === currentPage) {
+                    pageButton.classList.add('active');
+                }
+                pageButton.onclick = () => fetchSheetData(i);
+                paginationControls.appendChild(pageButton);
+            }
+
+            const nextButton = document.createElement('button');
+            nextButton.textContent = 'Siguiente';
+            nextButton.classList.add('page-btn');
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.onclick = () => fetchSheetData(currentPage + 1);
+            paginationControls.appendChild(nextButton);
+        }
+
+        async function sendEmail(record) {
+            const sendButton = document.getElementById(`send-btn-${record.row_index}`);
+            sendButton.disabled = true;
+            sendButton.textContent = 'Enviando...';
+
+            try {
+                const response = await fetch('/api/send-sheet-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        row_index: record.row_index,
+                        nombre: record.nombre,
+                        apellido: record.apellido,
+                        email: record.email
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    fetchSheetData(currentPage);
+                } else {
+                    alert(`Error: ${result.message || 'Ocurrió un error desconocido.'}`);
+                    sendButton.disabled = false;
+                    sendButton.textContent = 'Reintentar';
+                }
+            } catch (error) {
+                console.error('Error al enviar correo:', error);
+                alert(`Error de red: ${error.message}`);
+                sendButton.disabled = false;
+                sendButton.textContent = 'Reintentar';
+            }
+        }
+    </script>
+
+</body>
+</html>
+
