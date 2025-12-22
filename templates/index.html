@@ -93,6 +93,112 @@
         .page-btn:hover:not(:disabled) { background-color: #e9ecef; }
         .page-btn.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
         .page-btn:disabled { color: var(--secondary-color); cursor: not-allowed; }
+        
+        #error-log-container {
+            display: none; /* Oculto por defecto */
+            margin-top: 2em;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1em;
+        }
+        #error-log-container.visible {
+            display: block;
+        }
+        #error-log-container h2 {
+            font-size: 1.2em;
+            color: var(--secondary-color);
+            margin-bottom: 0.5em;
+        }
+        #error-log {
+            background-color: var(--light-gray);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1em;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            color: #d9534f; /* Bootstrap's danger color */
+        }
+        .error-entry {
+            margin-bottom: 0.5em;
+            padding-bottom: 0.5em;
+            border-bottom: 1px dashed #ccc;
+        }
+        .error-entry:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .error-timestamp {
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                margin: 1em;
+                padding: 1em;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+            tr {
+                border: 1px solid var(--border-color);
+                margin-bottom: 0.5em;
+                border-radius: 4px;
+            }
+            td {
+                border: none;
+                border-bottom: 1px solid #eee;
+                position: relative;
+                padding-left: 50%;
+                text-align: right;
+            }
+            td:last-child {
+                border-bottom: none;
+            }
+            td::before {
+                position: absolute;
+                top: 0.75em;
+                left: 1em;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                text-align: left;
+                font-weight: 600;
+            }
+            /* Label the data */
+            td:nth-of-type(1)::before { content: "Nombre:"; }
+            td:nth-of-type(2)::before { content: "Email:"; }
+            td:nth-of-type(3)::before { content: "Foto 1:"; }
+            td:nth-of-type(4)::before { content: "Foto 2:"; }
+            td:nth-of-type(5)::before { content: "Estado:"; }
+            td:nth-of-type(6)::before { content: "Email Manual:"; }
+            td:nth-of-type(7)::before { content: "Acciones:"; }
+
+            .action-cell {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .action-btn, .download-link {
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box; /* Include padding and border in the element's total width */
+            }
+            .page-btn {
+                padding: 0.5em 1em;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -100,6 +206,7 @@
     <div class="container">
         <h1>Permiso de Pesca Sin Cargo - Fauna NQN</h1>
         <button id="refresh-btn" class="action-btn">Refrescar Datos</button>
+        <button id="toggle-log-btn" class="action-btn">Logs</button>
         
         <table style="margin-top: 1em;">
             <thead>
@@ -109,6 +216,7 @@
                     <th>Foto 1</th>
                     <th>Foto 2</th>
                     <th>Estado</th>
+                    <th>Email Manual</th> <!-- NEW COLUMN -->
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -118,149 +226,394 @@
         </table>
 
         <div id="pagination-controls"></div>
+
+        <div id="error-log-container">
+            <h2>Registro de Errores (Sesión Actual)</h2>
+            <div id="error-log"></div>
+        </div>
     </div>
 
-    <script>
-        let currentPage = 1;
+        <script>
 
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchSheetData(currentPage);
-            document.getElementById('refresh-btn').addEventListener('click', () => fetchSheetData(1));
-        });
+            let currentPage = 1;
 
-        async function fetchSheetData(page = 1) {
-            currentPage = page;
-            const dataBody = document.getElementById('sheet-data');
-            dataBody.innerHTML = '<tr><td colspan="6">Cargando datos...</td></tr>';
-            
-            try {
-                const response = await fetch(`/api/get-sheet-data?page=${page}`);
-                const data = await response.json();
+    
+
+                    document.addEventListener('DOMContentLoaded', () => {
+
+    
+
+                        fetchSheetData(currentPage);
+
+    
+
+                        document.getElementById('refresh-btn').addEventListener('click', () => fetchSheetData(1));
+
+    
+
+                        document.getElementById('toggle-log-btn').addEventListener('click', () => {
+
+    
+
+                            document.getElementById('error-log-container').classList.toggle('visible');
+
+    
+
+                        });
+
+    
+
+                    });
+
+    
+
+            function logErrorToUI(message) {
+
+                const errorLog = document.getElementById('error-log');
+
+                const timestamp = new Date().toLocaleString('es-ES');
+
                 
-                dataBody.innerHTML = ''; // Limpiar la tabla
 
-                if (data.records.length === 0) {
-                    dataBody.innerHTML = '<tr><td colspan="6">No se encontraron datos para esta página.</td></tr>';
-                    renderPagination(0, 1);
-                    return;
-                }
+                const errorEntry = document.createElement('div');
+
+                errorEntry.classList.add('error-entry');
+
+    
+
+                const timestampSpan = document.createElement('span');
+
+                timestampSpan.classList.add('error-timestamp');
+
+                timestampSpan.textContent = `[${timestamp}] `;
+
                 
-                data.records.forEach(record => {
-                    const row = dataBody.insertRow();
-                    
-                    row.insertCell().textContent = `${record.nombre} ${record.apellido}`;
-                    row.insertCell().textContent = record.email;
-                    
-                    const cellFoto1 = row.insertCell();
-                    cellFoto1.innerHTML = `<a href="${record.foto1}" target="_blank">Ver Foto 1</a>`;
-                    
-                    const cellFoto2 = row.insertCell();
-                    cellFoto2.innerHTML = `<a href="${record.foto2}" target="_blank">Ver Foto 2</a>`;
-                    
-                    const cellStatus = row.insertCell();
-                    cellStatus.textContent = record.status;
-                    if (record.status.toLowerCase() === 'enviado') {
-                        cellStatus.classList.add('status-sent');
+
+                const messageSpan = document.createElement('span');
+
+                messageSpan.textContent = message;
+
+    
+
+                errorEntry.appendChild(timestampSpan);
+
+                errorEntry.appendChild(messageSpan);
+
+                
+
+                errorLog.appendChild(errorEntry);
+
+                // Scroll to the bottom of the log
+
+                errorLog.scrollTop = errorLog.scrollHeight;
+
+            }
+
+    
+
+            async function fetchSheetData(page = 1) {
+
+                currentPage = page;
+
+                const dataBody = document.getElementById('sheet-data');
+
+                dataBody.innerHTML = '<tr><td colspan="7">Cargando datos...</td></tr>';
+
+                
+
+                try {
+
+                    const response = await fetch(`/api/get-sheet-data?page=${page}`);
+
+                    if (!response.ok) {
+
+                        const errorData = await response.json();
+
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+
                     }
 
-                    const cellAction = row.insertCell();
-                    cellAction.classList.add('action-cell');
+                    const data = await response.json();
 
-                    const sendButton = document.createElement('button');
-                    sendButton.textContent = 'Enviar Email';
-                    sendButton.classList.add('action-btn');
-                    sendButton.id = `send-btn-${record.row_index}`;
                     
-                    const downloadLink = document.createElement('a');
-                    downloadLink.textContent = 'Descargar PDF';
-                    downloadLink.classList.add('download-link');
-                    const nombreEncoded = encodeURIComponent(record.nombre);
-                    const apellidoEncoded = encodeURIComponent(record.apellido);
-                    downloadLink.href = `/api/download-pdf-by-name/${nombreEncoded}/${apellidoEncoded}`;
-                    downloadLink.download = `Permiso_${record.nombre}_${record.apellido}.pdf`;
 
-                    if (record.status.toLowerCase() === 'enviado') {
-                        sendButton.disabled = true;
+                    dataBody.innerHTML = ''; // Limpiar la tabla
+
+    
+
+                    if (data.records.length === 0) {
+
+                        dataBody.innerHTML = '<tr><td colspan="7">No se encontraron datos para esta página.</td></tr>';
+
+                        renderPagination(0, 1);
+
+                        return;
+
+                    }
+
+                    
+
+                    data.records.forEach(record => {
+
+                        const row = dataBody.insertRow();
+
+                        
+
+                        row.insertCell().textContent = `${record.nombre} ${record.apellido}`;
+
+                        row.insertCell().textContent = record.email;
+
+                        
+
+                        const cellFoto1 = row.insertCell();
+
+                        cellFoto1.innerHTML = `<a href="${record.foto1}" target="_blank">Ver Foto 1</a>`;
+
+                        
+
+                        const cellFoto2 = row.insertCell();
+
+                        cellFoto2.innerHTML = `<a href="${record.foto2}" target="_blank">Ver Foto 2</a>`;
+
+                        
+
+                        const cellStatus = row.insertCell();
+
+                        cellStatus.textContent = record.status;
+
+                        if (record.status.toLowerCase() === 'enviado') {
+
+                            cellStatus.classList.add('status-sent');
+
+                        }
+
+    
+
+                        // NEW CELL FOR MANUAL EMAIL
+
+                        const cellManualEmail = row.insertCell();
+
+                        const manualEmailLink = document.createElement('a');
+
+                        manualEmailLink.textContent = 'Escribir Email';
+
+                        manualEmailLink.classList.add('action-btn'); // Reuse button style
+
+                        const subject = encodeURIComponent(`Información sobre su permiso de pesca`);
+
+                        const body = encodeURIComponent(`Estimado/a ${record.nombre} ${record.apellido},\n\nGracias por su solicitud. Respecto a su permiso de pesca, queremos informarle que...\n\nSaludos cordiales,\nFauna NQN`);
+
+                        manualEmailLink.href = `mailto:${record.email}?subject=${subject}&body=${body}`;
+
+                        cellManualEmail.appendChild(manualEmailLink);
+
+                        // END NEW CELL
+
+    
+
+                        const cellAction = row.insertCell();
+
+                        cellAction.classList.add('action-cell');
+
+    
+
+                        const sendButton = document.createElement('button');
+
+                        sendButton.textContent = 'Enviar Email';
+
+                        sendButton.classList.add('action-btn');
+
+                        sendButton.id = `send-btn-${record.row_index}`;
+
+                        
+
+                        const downloadLink = document.createElement('a');
+
+                        downloadLink.textContent = 'Descargar PDF';
+
+                        downloadLink.classList.add('download-link');
+
+                        const nombreEncoded = encodeURIComponent(record.nombre);
+
+                        const apellidoEncoded = encodeURIComponent(record.apellido);
+
+                        downloadLink.href = `/api/download-pdf-by-name/${nombreEncoded}/${apellidoEncoded}`;
+
+                        downloadLink.download = `Permiso_${record.nombre}_${record.apellido}.pdf`;
+
+    
+
+                        if (record.status.toLowerCase() === 'enviado') {
+
+                            sendButton.disabled = true;
+
+                        } else {
+
+                            sendButton.onclick = () => sendEmail(record);
+
+                        }
+
+                        cellAction.appendChild(sendButton);
+
+                        cellAction.appendChild(downloadLink);
+
+                    });
+
+    
+
+                    renderPagination(data.total_pages, data.current_page);
+
+    
+
+                } catch (error) {
+
+                    console.error('Error al obtener datos de la hoja:', error);
+
+                    const errorMessage = `Error al cargar datos: ${error.message}`;
+
+                    dataBody.innerHTML = `<tr><td colspan="7">${errorMessage}</td></tr>`;
+
+                    logErrorToUI(errorMessage);
+
+                }
+
+            }
+
+    
+
+            function renderPagination(totalPages, currentPage) {
+
+                const paginationControls = document.getElementById('pagination-controls');
+
+                paginationControls.innerHTML = '';
+
+    
+
+                if (totalPages <= 1) return;
+
+    
+
+                const prevButton = document.createElement('button');
+
+                prevButton.textContent = 'Anterior';
+
+                prevButton.classList.add('page-btn');
+
+                prevButton.disabled = currentPage === 1;
+
+                prevButton.onclick = () => fetchSheetData(currentPage - 1);
+
+                paginationControls.appendChild(prevButton);
+
+    
+
+                for (let i = 1; i <= totalPages; i++) {
+
+                    const pageButton = document.createElement('button');
+
+                    pageButton.textContent = i;
+
+                    pageButton.classList.add('page-btn');
+
+                    if (i === currentPage) {
+
+                        pageButton.classList.add('active');
+
+                    }
+
+                    pageButton.onclick = () => fetchSheetData(i);
+
+                    paginationControls.appendChild(pageButton);
+
+                }
+
+    
+
+                const nextButton = document.createElement('button');
+
+                nextButton.textContent = 'Siguiente';
+
+                nextButton.classList.add('page-btn');
+
+                nextButton.disabled = currentPage === totalPages;
+
+                nextButton.onclick = () => fetchSheetData(currentPage + 1);
+
+                paginationControls.appendChild(nextButton);
+
+            }
+
+    
+
+            async function sendEmail(record) {
+
+                const sendButton = document.getElementById(`send-btn-${record.row_index}`);
+
+                sendButton.disabled = true;
+
+                sendButton.textContent = 'Enviando...';
+
+    
+
+                try {
+
+                    const response = await fetch('/api/send-sheet-email', {
+
+                        method: 'POST',
+
+                        headers: { 'Content-Type': 'application/json' },
+
+                        body: JSON.stringify({
+
+                            row_index: record.row_index,
+
+                            nombre: record.nombre,
+
+                            apellido: record.apellido,
+
+                            email: record.email
+
+                        })
+
+                    });
+
+    
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+
+                        fetchSheetData(currentPage);
+
                     } else {
-                        sendButton.onclick = () => sendEmail(record);
+
+                        const errorMessage = `Error del servidor: ${result.message || result.error || 'Ocurrió un error desconocido.'}`;
+
+                        logErrorToUI(errorMessage);
+
+                        sendButton.disabled = false;
+
+                        sendButton.textContent = 'Reintentar';
+
                     }
-                    cellAction.appendChild(sendButton);
-                    cellAction.appendChild(downloadLink);
-                });
 
-                renderPagination(data.total_pages, data.current_page);
+                } catch (error) {
 
-            } catch (error) {
-                console.error('Error al obtener datos de la hoja:', error);
-                dataBody.innerHTML = `<tr><td colspan="6">Error al cargar datos: ${error.message}</td></tr>`;
-            }
-        }
+                    console.error('Error al enviar correo:', error);
 
-        function renderPagination(totalPages, currentPage) {
-            const paginationControls = document.getElementById('pagination-controls');
-            paginationControls.innerHTML = '';
+                    const errorMessage = `Error de red al enviar correo: ${error.message}`;
 
-            if (totalPages <= 1) return;
+                    logErrorToUI(errorMessage);
 
-            const prevButton = document.createElement('button');
-            prevButton.textContent = 'Anterior';
-            prevButton.classList.add('page-btn');
-            prevButton.disabled = currentPage === 1;
-            prevButton.onclick = () => fetchSheetData(currentPage - 1);
-            paginationControls.appendChild(prevButton);
-
-            for (let i = 1; i <= totalPages; i++) {
-                const pageButton = document.createElement('button');
-                pageButton.textContent = i;
-                pageButton.classList.add('page-btn');
-                if (i === currentPage) {
-                    pageButton.classList.add('active');
-                }
-                pageButton.onclick = () => fetchSheetData(i);
-                paginationControls.appendChild(pageButton);
-            }
-
-            const nextButton = document.createElement('button');
-            nextButton.textContent = 'Siguiente';
-            nextButton.classList.add('page-btn');
-            nextButton.disabled = currentPage === totalPages;
-            nextButton.onclick = () => fetchSheetData(currentPage + 1);
-            paginationControls.appendChild(nextButton);
-        }
-
-        async function sendEmail(record) {
-            const sendButton = document.getElementById(`send-btn-${record.row_index}`);
-            sendButton.disabled = true;
-            sendButton.textContent = 'Enviando...';
-
-            try {
-                const response = await fetch('/api/send-sheet-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        row_index: record.row_index,
-                        nombre: record.nombre,
-                        apellido: record.apellido,
-                        email: record.email
-                    })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    fetchSheetData(currentPage);
-                } else {
-                    alert(`Error: ${result.message || 'Ocurrió un error desconocido.'}`);
                     sendButton.disabled = false;
+
                     sendButton.textContent = 'Reintentar';
+
                 }
-            } catch (error) {
-                console.error('Error al enviar correo:', error);
-                alert(`Error de red: ${error.message}`);
-                sendButton.disabled = false;
-                sendButton.textContent = 'Reintentar';
+
             }
-        }
-    </script>
+
+        </script>
 
 </body>
 </html>
