@@ -198,16 +198,21 @@ def send_sheet_email():
 
     try:
         drive_service = services['drive']
+        # Construir la consulta de búsqueda para Drive, ordenando por fecha de modificación descendente
+        # y limitando a 1 resultado para obtener el más reciente.
         query = f"'{DRIVE_FOLDER_ID}' in parents and name contains '{nombre}' and name contains '{apellido}' and mimeType='application/pdf'"
         
-        results = drive_service.files().list(q=query, pageSize=2, fields="files(id, name)").execute()
+        results = drive_service.files().list(
+            q=query, 
+            pageSize=1, # Limitar a 1 resultado
+            orderBy='modifiedTime desc', # Ordenar por fecha de modificación descendente
+            fields="files(id, name)"
+        ).execute()
         files = results.get('files', [])
 
         if len(files) == 0:
             return jsonify({"status": "error", "message": f"No se encontró ningún PDF para '{nombre} {apellido}'."}), 404
-        if len(files) > 1:
-            return jsonify({"status": "error", "message": f"Se encontraron múltiples PDFs para '{nombre} {apellido}'. No se puede decidir cuál enviar."}), 409
-
+        
         pdf_file = files[0]
         pdf_content = download_pdf(drive_service, pdf_file['id'])
         
