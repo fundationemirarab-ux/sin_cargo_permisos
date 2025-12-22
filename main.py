@@ -1,29 +1,32 @@
 from flask import Flask, render_template, jsonify, request, send_file
 import os
 import google.auth
-from google.oauth2 import service_account # Importante para cuentas de servicio
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 import io
-import smtplib, ssl
+import re
+import math
+import json
+import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-import re
-import math
-import json # Importar json
 from dotenv import load_dotenv
 
-load_dotenv() # Cargar variables de entorno del archivo .env
+load_dotenv()
 
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN ---
+# Permisos para Sheets, Drive, y ahora Gmail
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive.readonly'
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/gmail.send'
 ]
 
 SPREADSHEET_ID = '1dn9W-1hxSxPmnUUHDbF_ZG_yzaYlOYFoIO3LqDMGgQw'
@@ -33,39 +36,36 @@ DRIVE_FOLDER_ID = '1ljOYPhde0Uu9_0l9ToPF8xP4ck2u-3ee'
 
 # --- HELPERS ---
 def get_google_services():
-    """Autentica con las APIs de Google usando una cuenta de servicio."""
-    # Las credenciales se cargan desde una variable de entorno en formato JSON para producción (Render)
-    # o desde un archivo 'service_account.json' para desarrollo local.
-    creds = None
-    creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-
-    if creds_json_str:
-        try:
-            # Producción: Cargar desde variable de entorno
-            creds_info = json.loads(creds_json_str)
-            creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
-        except Exception as e:
-            print(f"Error al cargar credenciales desde GOOGLE_CREDENTIALS_JSON: {e}")
-            return None
-    elif os.path.exists('service_account.json'):
-        try:
-            # Desarrollo local: Cargar desde archivo
-            creds = service_account.Credentials.from_service_account_file(
-                'service_account.json', scopes=SCOPES)
-        except Exception as e:
-            print(f"Error al cargar credenciales desde service_account.json: {e}")
-            return None
-    else:
-        # Si no hay credenciales, no se puede continuar
-        print("Error: No se encontró 'service_account.json' ni la variable de entorno 'GOOGLE_CREDENTIALS_JSON'.")
-        return None
-
+    """Crea las credenciales desde las variables de entorno y devuelve los servicios de Google."""
     try:
+        # Reconstruye la información de las credenciales a partir de las variables de entorno
+        creds_info = {
+            'client_id': os.environ.get('GMAIL_CLIENT_ID'),
+            'client_secret': os.environ.get('GMAIL_CLIENT_SECRET'),
+            'refresh_token': os.environ.get('GMAIL_REFRESH_TOKEN'),
+            'token_uri': 'https://oauth2.googleapis.com/token',
+        }
+
+        if not all([creds_info['client_id'], creds_info['client_secret'], creds_info['refresh_token']]):
+            print("Error: Faltan una o más variables de entorno de Gmail (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN).")
+            return None
+
+        # Crea el objeto de credenciales
+        creds = Credentials.from_authorized_user_info(creds_info, SCOPES)
+
+        # Si las credenciales han expirado, las refresca. Esto es clave para que no expire la sesión.
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+
+        # Construir los servicios
         sheets_service = build('sheets', 'v4', credentials=creds)
         drive_service = build('drive', 'v3', credentials=creds)
-        return {'sheets': sheets_service, 'drive': drive_service}
-    except HttpError as error:
-        print(f"Ocurrió un error al crear los servicios de Google: {error}")
+        gmail_service = build('gmail', 'v1', credentials=creds)
+        
+        return {'sheets': sheets_service, 'drive': drive_service, 'gmail': gmail_service}
+
+    except Exception as e:
+        print(f"Ocurrió un error al crear los servicios de Google: {e}")
         return None
 
 def download_pdf(drive_service, file_id):
@@ -74,7 +74,7 @@ def download_pdf(drive_service, file_id):
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
     done = False
-    while done is False:
+    while not done:
         status, done = downloader.next_chunk()
     fh.seek(0)
     return fh.read()
@@ -90,32 +90,40 @@ def transform_drive_link(link):
         return f'https://drive.google.com/uc?export=view&id={file_id}'
     return link
 
-def send_email_with_attachment(sender_email, sender_password, recipient_email, subject, body, attachment_content, attachment_filename):
-    """Envía un correo electrónico con un archivo adjunto."""
+def send_email_with_attachment(gmail_service, sender_email, recipient_email, subject, body, attachment_content, attachment_filename):
+    """Crea y envía un correo con adjunto usando la API de Gmail."""
     try:
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = recipient_email
-        msg['Subject'] = subject
+        message = MIMEMultipart()
+        message['to'] = recipient_email
+        message['from'] = sender_email
+        message['subject'] = subject
 
-        msg.attach(MIMEText(body, 'plain'))
+        msg = MIMEText(body, 'html') # Usar HTML para el cuerpo
+        message.attach(msg)
+
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(attachment_content)
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', 'attachment', filename=attachment_filename)
-        msg.attach(part)
+        message.attach(part)
 
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
+        # La API de Gmail requiere que el mensaje esté codificado en base64-urlsafe.
+        encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        create_message = {'raw': encoded_message}
+        
+        # 'me' se refiere al usuario autenticado (el dueño del refresh_token)
+        send_message = gmail_service.users().messages().send(userId='me', body=create_message).execute()
+        print(f"Correo enviado a {recipient_email}. Message ID: {send_message['id']}")
         return True
+    except HttpError as error:
+        print(f"Ocurrió un error al enviar el correo con la API de Gmail: {error}")
+        return False
     except Exception as e:
-        print(f"Error al enviar el correo: {e}")
+        print(f"Ocurrió un error inesperado al crear el mensaje de correo: {e}")
         return False
 
-# --- ENDPOINTS DE LA APP ---
 
+# --- ENDPOINTS DE LA APP ---
 @app.route('/')
 def index():
     """Renderiza la página principal."""
@@ -126,7 +134,7 @@ def get_sheet_data():
     """Endpoint para leer los datos de la hoja de cálculo con paginación."""
     services = get_google_services()
     if not services:
-        return jsonify({"error": "No se pudo autenticar con Google."}), 500
+        return jsonify({"error": "No se pudo autenticar con Google. Revisa las variables de entorno."}), 500
     
     try:
         sheet = services['sheets'].spreadsheets()
@@ -139,26 +147,23 @@ def get_sheet_data():
         data = []
         for i, row in enumerate(values):
             data.append({
-                'row_index': i + 2, # Fila real en la hoja de cálculo
+                'row_index': i + 2,
                 'nombre': row[0] if len(row) > 0 else '',
                 'apellido': row[1] if len(row) > 1 else '',
-                'email': row[5] if len(row) > 5 else '', # Columna F (indice 5)
-                'foto1': row[10] if len(row) > 10 else '', # Columna K (indice 10)
-                'foto2': row[11] if len(row) > 11 else '', # Columna L (indice 11)
-                'status': row[12] if len(row) > 12 else '' # Columna M (indice 12)
+                'email': row[5] if len(row) > 5 else '',
+                'foto1': row[10] if len(row) > 10 else '',
+                'foto2': row[11] if len(row) > 11 else '',
+                'status': row[12] if len(row) > 12 else ''
             })
         
         for record in data:
             record['foto1'] = transform_drive_link(record['foto1'])
             record['foto2'] = transform_drive_link(record['foto2'])
 
-        # Invertir el orden de toda la lista para que los más nuevos aparezcan primero
         data.reverse()
         
-        # Implementación de la paginación
         page = request.args.get('page', 1, type=int)
         PAGE_SIZE = 10
-        
         start_index = (page - 1) * PAGE_SIZE
         end_index = start_index + PAGE_SIZE
         
@@ -173,12 +178,11 @@ def get_sheet_data():
 
     except HttpError as error:
         print(f"Ocurrió un error en la API de Sheets: {error}")
-        return jsonify({"error": f"Ocurrió un error en la API de Sheets: {error}"}), 500
-
+        return jsonify({"error": f"Ocurrió un error en la API de Sheets: {error.resp.status}, {error.resp.reason}"}), 500
 
 @app.route('/api/send-sheet-email', methods=['POST'])
 def send_sheet_email():
-    """Busca un PDF en Drive, y lo envía por correo a la dirección de una fila."""
+    """Busca un PDF en Drive, y lo envía por correo usando la API de Gmail."""
     data = request.json
     row_index = data.get('row_index')
     nombre = data.get('nombre')
@@ -190,13 +194,11 @@ def send_sheet_email():
 
     services = get_google_services()
     if not services:
-        return jsonify({"status": "error", "message": "No se pudo autenticar con Google."}), 500
+        return jsonify({"status": "error", "message": "No se pudo autenticar con Google. Revisa las variables de entorno."}), 500
 
     try:
         drive_service = services['drive']
-        # Construir la consulta de búsqueda para Drive
         query = f"'{DRIVE_FOLDER_ID}' in parents and name contains '{nombre}' and name contains '{apellido}' and mimeType='application/pdf'"
-        
         
         results = drive_service.files().list(q=query, pageSize=2, fields="files(id, name)").execute()
         files = results.get('files', [])
@@ -210,40 +212,35 @@ def send_sheet_email():
         pdf_content = download_pdf(drive_service, pdf_file['id'])
         
         sender_email = os.getenv("SENDER_EMAIL")
-        sender_password = os.getenv("SENDER_PASSWORD")
-
-        if not sender_email or not sender_password:
-            return jsonify({"status": "error", "message": "Faltan credenciales de envío de correo en el servidor."}), 500
+        if not sender_email:
+            return jsonify({"status": "error", "message": "Falta la variable de entorno SENDER_EMAIL."}), 500
         
         subject = f"Permiso de Pesca adjunto para {nombre} {apellido}"
-        body = f"Estimado/a {nombre} {apellido},\n\nAdjunto encontrará el permiso de pesca solicitado.\n\nSaludos cordiales."
+        body = f"Estimado/a {nombre} {apellido},<br><br>Adjunto encontrará el permiso de pesca solicitado.<br><br>Saludos cordiales."
 
-        if send_email_with_attachment(sender_email, sender_password, email, subject, body, pdf_content, pdf_file.get('name')):
+        if send_email_with_attachment(services['gmail'], sender_email, email, subject, body, pdf_content, pdf_file.get('name')):
             try:
                 sheets_service = services['sheets']
-                update_range = f'permisos!M{row_index}' # Columna M para el estado
-                update_body = {
-                    'values': [['Enviado']]
-                }
+                update_range = f'permisos!M{row_index}'
+                update_body = { 'values': [['Enviado']] }
                 sheets_service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID, 
                     range=update_range,
                     valueInputOption='RAW', 
                     body=update_body
                 ).execute()
-                print(f"Estado de la fila {row_index} actualizado a 'Enviado' en la hoja de cálculo.")
+                print(f"Estado de la fila {row_index} actualizado a 'Enviado'.")
             except HttpError as sheet_error:
-                print(f"Error al actualizar la hoja de cálculo para la fila {row_index}: {sheet_error}")
-                return jsonify({"status": "error", "message": f"Correo enviado, pero fallo al actualizar el estado en la hoja: {sheet_error}"}), 500
+                print(f"Error al actualizar la hoja: {sheet_error}")
+                return jsonify({"status": "success", "message": f"Correo enviado, pero falló al actualizar el estado en la hoja: {sheet_error}"})
             
-            return jsonify({"status": "success", "message": f"Correo enviado a {email} y estado actualizado en la hoja."})
+            return jsonify({"status": "success", "message": f"Correo enviado a {email} y estado actualizado."})
         else:
-            return jsonify({"status": "error", "message": "Fallo al enviar el correo."}), 500
+            return jsonify({"status": "error", "message": "Fallo al enviar el correo a través de la API de Gmail."}), 500
 
     except Exception as e:
-        print(f"Ocurrió un error inesperado: {e}")
-        return jsonify({"error": f"Error interno del servidor: {e}"}), 500
-
+        print(f"Ocurrió un error inesperado en send_sheet_email: {e}")
+        return jsonify({"error": "Error interno del servidor al procesar la solicitud."}), 500
 
 @app.route('/api/download-pdf-by-name/<nombre>/<apellido>')
 def download_pdf_by_name(nombre, apellido):
