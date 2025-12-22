@@ -1,9 +1,7 @@
 from flask import Flask, render_template, jsonify, request, send_file
 import os
 import google.auth
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2 import service_account # Importante para cuentas de servicio
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
@@ -15,18 +13,10 @@ from email.mime.base import MIMEBase
 from email import encoders
 import re
 import math
+import json # Importar json
 from dotenv import load_dotenv
 
 load_dotenv() # Cargar variables de entorno del archivo .env
-
-# --- Lógica para despliegue en Render ---
-# Render no soporta archivos JSON de secretos directamente.
-# La solución es guardar el contenido de credentials.json en una variable de entorno.
-# Este código crea el archivo credentials.json a partir de esa variable de entorno si existe.
-if 'GOOGLE_CREDENTIALS' in os.environ:
-    creds_content = os.environ['GOOGLE_CREDENTIALS']
-    with open('credentials.json', 'w') as f:
-        f.write(creds_content)
 
 app = Flask(__name__)
 
@@ -35,8 +25,6 @@ SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive.readonly'
 ]
-TOKEN_PATH = 'token.json'
-CREDS_PATH = 'credentials.json'
 
 SPREADSHEET_ID = '1dn9W-1hxSxPmnUUHDbF_ZG_yzaYlOYFoIO3LqDMGgQw'
 RANGE_NAME = 'permisos!A2:M'
@@ -45,39 +33,33 @@ DRIVE_FOLDER_ID = '1ljOYPhde0Uu9_0l9ToPF8xP4ck2u-3ee'
 
 # --- HELPERS ---
 def get_google_services():
-    """Autentica con las APIs de Google y devuelve un diccionario de servicios."""
+    """Autentica con las APIs de Google usando una cuenta de servicio."""
+    # Las credenciales se cargan desde una variable de entorno en formato JSON para producción (Render)
+    # o desde un archivo 'service_account.json' para desarrollo local.
     creds = None
-    
-    # Intenta cargar desde GOOGLE_TOKEN environment variable (para despliegues en la nube)
-    if 'GOOGLE_TOKEN' in os.environ:
+    creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+
+    if creds_json_str:
         try:
-            creds = Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN']), SCOPES)
+            # Producción: Cargar desde variable de entorno
+            creds_info = json.loads(creds_json_str)
+            creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
         except Exception as e:
-            print(f"Error al cargar GOOGLE_TOKEN desde variable de entorno: {e}")
-            creds = None # Forzar re-auth si el env var token es malo
+            print(f"Error al cargar credenciales desde GOOGLE_CREDENTIALS_JSON: {e}")
+            return None
+    elif os.path.exists('service_account.json'):
+        try:
+            # Desarrollo local: Cargar desde archivo
+            creds = service_account.Credentials.from_service_account_file(
+                'service_account.json', scopes=SCOPES)
+        except Exception as e:
+            print(f"Error al cargar credenciales desde service_account.json: {e}")
+            return None
+    else:
+        # Si no hay credenciales, no se puede continuar
+        print("Error: No se encontró 'service_account.json' ni la variable de entorno 'GOOGLE_CREDENTIALS_JSON'.")
+        return None
 
-    # Si no se cargó desde GOOGLE_TOKEN, intenta cargar desde token.json local
-    if not creds and os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-
-    # Si no hay credenciales (válidas), permite que el usuario inicie sesión.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            # Solo si no estamos en Render (o no hay GOOGLE_TOKEN), iniciamos el flujo local
-            if 'GOOGLE_TOKEN' not in os.environ:
-                flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
-                creds = flow.run_local_server(port=0)
-            else:
-                # Si estamos en Render y GOOGLE_TOKEN no era válido, no podemos hacer flujo local
-                raise Exception("GOOGLE_TOKEN inválido o expirado en Render, y no se puede autenticar interactivamente.")
-        
-        # Guardar las credenciales en token.json solo si no estamos usando GOOGLE_TOKEN en el entorno
-        if 'GOOGLE_TOKEN' not in os.environ:
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
-    
     try:
         sheets_service = build('sheets', 'v4', credentials=creds)
         drive_service = build('drive', 'v3', credentials=creds)
