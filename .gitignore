@@ -1,21 +1,34 @@
+# Archivos de Entorno
+# --------------------
+# Contiene secretos, nunca debe ser subido.
+.env
+.env.*
+
 # Credenciales y Tokens - ¡NO SUBIR A GITHUB!
 credentials.json
 token.json
+service_account.json
 
 # Entorno virtual de Python
+# -------------------------
 venv/
 *.venv
 env/
+/env
+/venv
 
 # Archivos de cache de Python
+# ---------------------------
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
 # Directorio del IDE
+# ------------------
 .idea/
 
 # Archivos de sistema operativo
+# ---------------------------
 .DS_Store
 Thumbs.db

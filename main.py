@@ -131,12 +131,15 @@ def index():
 
 @app.route('/api/get-sheet-data')
 def get_sheet_data():
-    """Endpoint para leer los datos de la hoja de cálculo con paginación."""
+    """Endpoint para leer los datos de la hoja de cálculo con paginación y búsqueda."""
     services = get_google_services()
     if not services:
         return jsonify({"error": "No se pudo autenticar con Google. Revisa las variables de entorno."}), 500
     
     try:
+        # Obtener el término de búsqueda de los argumentos de la URL
+        search_term = request.args.get('search', '', type=str).lower()
+
         sheet = services['sheets'].spreadsheets()
         result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
         values = result.get('values', [])
@@ -144,9 +147,9 @@ def get_sheet_data():
         if not values:
             return jsonify({"records": [], "total_pages": 0, "current_page": 1})
 
-        data = []
+        all_data = []
         for i, row in enumerate(values):
-            data.append({
+            all_data.append({
                 'row_index': i + 2,
                 'nombre': row[0] if len(row) > 0 else '',
                 'apellido': row[1] if len(row) > 1 else '',
@@ -156,19 +159,30 @@ def get_sheet_data():
                 'status': row[12] if len(row) > 12 else ''
             })
         
-        for record in data:
+        # Filtrar los datos si se proporcionó un término de búsqueda
+        if search_term:
+            filtered_data = [
+                record for record in all_data
+                if search_term in record['nombre'].lower() or \
+                   search_term in record['apellido'].lower() or \
+                   search_term in record['email'].lower()
+            ]
+        else:
+            filtered_data = all_data
+
+        for record in filtered_data:
             record['foto1'] = transform_drive_link(record['foto1'])
             record['foto2'] = transform_drive_link(record['foto2'])
 
-        data.reverse()
+        filtered_data.reverse()
         
         page = request.args.get('page', 1, type=int)
         PAGE_SIZE = 10
         start_index = (page - 1) * PAGE_SIZE
         end_index = start_index + PAGE_SIZE
         
-        paged_records = data[start_index:end_index]
-        total_pages = math.ceil(len(data) / PAGE_SIZE)
+        paged_records = filtered_data[start_index:end_index]
+        total_pages = math.ceil(len(filtered_data) / PAGE_SIZE)
 
         return jsonify({
             "records": paged_records,
