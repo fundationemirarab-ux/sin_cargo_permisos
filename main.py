@@ -262,6 +262,41 @@ def send_sheet_email():
         print(f"Ocurrió un error inesperado en send_sheet_email: {e}")
         return jsonify({"error": "Error interno del servidor al procesar la solicitud."}), 500
 
+@app.route('/api/update-observation', methods=['POST'])
+def update_observation():
+    """Actualiza la celda de observación en la hoja de cálculo."""
+    data = request.json
+    row_index = data.get('row_index')
+    observation = data.get('observation')
+
+    if row_index is None or observation is None:
+        return jsonify({"status": "error", "message": "Faltan 'row_index' u 'observation' en la solicitud."}), 400
+
+    services = get_google_services()
+    if not services:
+        return jsonify({"status": "error", "message": "No se pudo autenticar con Google."}), 500
+
+    try:
+        sheets_service = services['sheets']
+        update_range = f'permisos!N{row_index}'
+        update_body = {'values': [[observation]]}
+        
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=update_range,
+            valueInputOption='RAW',
+            body=update_body
+        ).execute()
+        
+        return jsonify({"status": "success", "message": f"Observación de la fila {row_index} actualizada."})
+
+    except HttpError as error:
+        print(f"Error al actualizar la hoja: {error}")
+        return jsonify({"status": "error", "message": f"Error al actualizar la hoja: {error}"}), 500
+    except Exception as e:
+        print(f"Ocurrió un error inesperado en update_observation: {e}")
+        return jsonify({"error": "Error interno del servidor."}), 500
+
 @app.route('/api/download-pdf-by-name/<nombre>/<apellido>')
 def download_pdf_by_name(nombre, apellido):
     """Busca un PDF en Drive por nombre/apellido y lo devuelve para descargar."""

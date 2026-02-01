@@ -167,6 +167,20 @@
             color: #333;
         }
 
+        .observation-cell {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .observation-cell input {
+            flex-grow: 1;
+            padding: 0.4em 0.8em;
+            font-family: inherit;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .container {
@@ -473,7 +487,20 @@
 
                             cellManualEmail.appendChild(manualEmailLink);
 
-                            row.insertCell().textContent = record.observaciones;
+                            const obsCell = row.insertCell();
+                            obsCell.classList.add('observation-cell');
+
+                            const obsInput = document.createElement('input');
+                            obsInput.type = 'text';
+                            obsInput.value = record.observaciones;
+                            
+                            const saveButton = document.createElement('button');
+                            saveButton.textContent = 'Guardar';
+                            saveButton.classList.add('action-btn');
+                            saveButton.onclick = () => updateObservation(record.row_index, obsInput, saveButton);
+
+                            obsCell.appendChild(obsInput);
+                            obsCell.appendChild(saveButton);
 
                             const cellAction = row.insertCell();
 
@@ -895,6 +922,45 @@
 
                     }
 
+                }
+
+        
+                async function updateObservation(rowIndex, inputElement, buttonElement) {
+                    const originalButtonText = buttonElement.textContent;
+                    buttonElement.disabled = true;
+                    buttonElement.textContent = 'Guardando...';
+
+                    const observation = inputElement.value;
+
+                    try {
+                        const response = await fetch('/api/update-observation', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                row_index: rowIndex,
+                                observation: observation
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok) {
+                            buttonElement.textContent = 'Guardado!';
+                            setTimeout(() => {
+                                buttonElement.disabled = false;
+                                buttonElement.textContent = originalButtonText;
+                            }, 2000);
+                        } else {
+                            throw new Error(result.message || 'Error del servidor');
+                        }
+                    } catch (error) {
+                        console.error('Error al actualizar la observación:', error);
+                        logErrorToUI(`Error al guardar la observación para la fila ${rowIndex}: ${error.message}`);
+                        buttonElement.textContent = 'Error!';
+                        setTimeout(() => {
+                            buttonElement.disabled = false;
+                            buttonElement.textContent = originalButtonText;
+                        }, 3000);
+                    }
                 }
 
             </script>
