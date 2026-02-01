@@ -471,21 +471,35 @@
 
                             }
 
-                            const cellManualEmail = row.insertCell();
+                                                        const cellManualEmail = row.insertCell();
 
-                            const manualEmailLink = document.createElement('a');
+                                                        const manualEmailLink = document.createElement('a');
 
-                            manualEmailLink.textContent = 'Escribir Email';
+                                                        manualEmailLink.textContent = 'Contactar Email'; // Updated text
 
-                            manualEmailLink.classList.add('action-btn');
+                                                        manualEmailLink.classList.add('action-btn');
 
-                            const subject = encodeURIComponent(`Información sobre su permiso de pesca`);
+                                                        manualEmailLink.target = '_blank'; // Open in new tab
 
-                            const body = encodeURIComponent(`Estimado/a ${record.nombre} ${record.apellido},\n\nGracias por su solicitud. Respecto a su permiso de pesca, queremos informarle que...\n\nSaludos cordiales,\nFauna NQN`);
+                                                        
 
-                            manualEmailLink.href = `mailto:${record.email}?subject=${subject}&body=${body}`;
+                                                        // Gmail-specific URL
 
-                            cellManualEmail.appendChild(manualEmailLink);
+                                                        const gmailSubject = encodeURIComponent(`Consulta sobre su permiso de pesca`);
+
+                                                        const gmailBody = encodeURIComponent(`Estimado/a ${record.nombre} ${record.apellido},\n\nEscriba aquí su consulta.\n\nSaludos cordiales,\nFauna NQN`);
+
+                                                        const senderEmail = 'faunapescaycaza@gmail.com'; // Fixed sender
+
+                                                        
+
+                                                        // Construct Gmail URL
+
+                                                        manualEmailLink.href = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=${encodeURIComponent(record.email)}&su=${gmailSubject}&body=${gmailBody}&from=${encodeURIComponent(senderEmail)}`;
+
+                                                        
+
+                                                        cellManualEmail.appendChild(manualEmailLink);
 
                             const obsCell = row.insertCell();
                             obsCell.classList.add('observation-cell');
