@@ -30,7 +30,7 @@ SCOPES = [
 ]
 
 SPREADSHEET_ID = '1dn9W-1hxSxPmnUUHDbF_ZG_yzaYlOYFoIO3LqDMGgQw'
-RANGE_NAME = 'permisos!A2:M'
+RANGE_NAME = 'permisos!A2:N'
 DRIVE_FOLDER_ID = '1ljOYPhde0Uu9_0l9ToPF8xP4ck2u-3ee'
 
 
@@ -156,7 +156,8 @@ def get_sheet_data():
                 'email': row[5] if len(row) > 5 else '',
                 'foto1': row[10] if len(row) > 10 else '',
                 'foto2': row[11] if len(row) > 11 else '',
-                'status': row[12] if len(row) > 12 else ''
+                'status': row[12] if len(row) > 12 else '',
+                'observaciones': row[13] if len(row) > 13 else ''
             })
         
         # Filtrar los datos si se proporcionó un término de búsqueda

@@ -217,6 +217,7 @@
             td:nth-of-type(5)::before { content: "Estado:"; }
             td:nth-of-type(6)::before { content: "Email Manual:"; }
             td:nth-of-type(7)::before { content: "Acciones:"; }
+            td:nth-of-type(8)::before { content: "Observaciones:"; }
 
             .action-cell {
                 flex-direction: column;
@@ -256,7 +257,8 @@
                     <th>Foto 1</th>
                     <th>Foto 2</th>
                     <th>Estado</th>
-                    <th>Email Manual</th> <!-- NEW COLUMN -->
+                    <th>Email Manual</th>
+                    <th>Observaciones</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -389,7 +391,7 @@
 
                     const dataBody = document.getElementById('sheet-data');
 
-                    dataBody.innerHTML = '<tr><td colspan="7">Cargando datos...</td></tr>';
+                    dataBody.innerHTML = '<tr><td colspan="8">Cargando datos...</td></tr>';
 
                     
 
@@ -419,7 +421,7 @@
 
                         if (data.records.length === 0) {
 
-                            dataBody.innerHTML = '<tr><td colspan="7">No se encontraron datos para esta página.</td></tr>';
+                            dataBody.innerHTML = '<tr><td colspan="8">No se encontraron datos para esta página.</td></tr>';
 
                             renderPagination(0, 1, searchTerm);
 
@@ -470,6 +472,8 @@
                             manualEmailLink.href = `mailto:${record.email}?subject=${subject}&body=${body}`;
 
                             cellManualEmail.appendChild(manualEmailLink);
+
+                            row.insertCell().textContent = record.observaciones;
 
                             const cellAction = row.insertCell();
 
@@ -523,15 +527,15 @@
 
                     } catch (error) {
 
-                        console.error('Error al obtener datos de la hoja:', error);
+                                                console.error('Error al obtener datos de la hoja:', error);
 
-                        const errorMessage = `Error al cargar datos: ${error.message}`;
+                                                const errorMessage = `Error al cargar datos: ${error.message}`;
 
-                        dataBody.innerHTML = `<tr><td colspan="7">${errorMessage}</td></tr>`;
+                                                dataBody.innerHTML = `<tr><td colspan="8">${errorMessage}</td></tr>`;
 
-                        logErrorToUI(errorMessage);
+                                                logErrorToUI(errorMessage);
 
-                    }
+                                            }
 
                 }
 
