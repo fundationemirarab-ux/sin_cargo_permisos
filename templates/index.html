@@ -537,67 +537,291 @@
 
         
 
-                function renderPagination(totalPages, currentPage, searchTerm = '') {
-
-                    const paginationControls = document.getElementById('pagination-controls');
-
-                    paginationControls.innerHTML = '';
+                                function renderPagination(totalPages, currentPage, searchTerm = '') {
 
         
 
-                    if (totalPages <= 1) return;
+                                    const paginationControls = document.getElementById('pagination-controls');
 
         
 
-                    const prevButton = document.createElement('button');
-
-                    prevButton.textContent = 'Anterior';
-
-                    prevButton.classList.add('page-btn');
-
-                    prevButton.disabled = currentPage === 1;
-
-                    prevButton.onclick = () => fetchSheetData(currentPage - 1, searchTerm);
-
-                    paginationControls.appendChild(prevButton);
+                                    paginationControls.innerHTML = '';
 
         
 
-                    for (let i = 1; i <= totalPages; i++) {
-
-                        const pageButton = document.createElement('button');
-
-                        pageButton.textContent = i;
-
-                        pageButton.classList.add('page-btn');
-
-                        if (i === currentPage) {
-
-                            pageButton.classList.add('active');
-
-                        }
-
-                        pageButton.onclick = () => fetchSheetData(i, searchTerm);
-
-                        paginationControls.appendChild(pageButton);
-
-                    }
+                
 
         
 
-                    const nextButton = document.createElement('button');
+                                    if (totalPages <= 1) return;
 
-                    nextButton.textContent = 'Siguiente';
+        
 
-                    nextButton.classList.add('page-btn');
+                
 
-                    nextButton.disabled = currentPage === totalPages;
+        
 
-                    nextButton.onclick = () => fetchSheetData(currentPage + 1, searchTerm);
+                                    const createPageButton = (text, page, isDisabled = false, isActive = false) => {
 
-                    paginationControls.appendChild(nextButton);
+        
 
-                }
+                                        const button = document.createElement('button');
+
+        
+
+                                        button.textContent = text;
+
+        
+
+                                        button.classList.add('page-btn');
+
+        
+
+                                        if (isActive) {
+
+        
+
+                                            button.classList.add('active');
+
+        
+
+                                        }
+
+        
+
+                                        button.disabled = isDisabled;
+
+        
+
+                                        button.onclick = () => fetchSheetData(page, searchTerm);
+
+        
+
+                                        return button;
+
+        
+
+                                    };
+
+        
+
+                
+
+        
+
+                                    const createEllipsis = () => {
+
+        
+
+                                        const ellipsis = document.createElement('span');
+
+        
+
+                                        ellipsis.textContent = '...';
+
+        
+
+                                        ellipsis.style.padding = '0.3em 0.8em';
+
+        
+
+                                        return ellipsis;
+
+        
+
+                                    };
+
+        
+
+                
+
+        
+
+                                    // Botón "Anterior"
+
+        
+
+                                    paginationControls.appendChild(createPageButton('Anterior', currentPage - 1, currentPage === 1));
+
+        
+
+                
+
+        
+
+                                    const pageRangeToShow = 2;
+
+        
+
+                                    let pages = [];
+
+        
+
+                
+
+        
+
+                                    // Lógica para decidir qué páginas mostrar
+
+        
+
+                                    if (totalPages <= 5) {
+
+        
+
+                                        for (let i = 1; i <= totalPages; i++) {
+
+        
+
+                                            pages.push(i);
+
+        
+
+                                        }
+
+        
+
+                                    } else {
+
+        
+
+                                        pages.push(1);
+
+        
+
+                                        if (currentPage > pageRangeToShow + 2) {
+
+        
+
+                                            pages.push('...');
+
+        
+
+                                        }
+
+        
+
+                
+
+        
+
+                                        let startPage = Math.max(2, currentPage - pageRangeToShow);
+
+        
+
+                                        let endPage = Math.min(totalPages - 1, currentPage + pageRangeToShow);
+
+        
+
+                                        
+
+        
+
+                                        for (let i = startPage; i <= endPage; i++) {
+
+        
+
+                                            if (!pages.includes(i)) {
+
+        
+
+                                                pages.push(i);
+
+        
+
+                                            }
+
+        
+
+                                        }
+
+        
+
+                
+
+        
+
+                                        if (currentPage < totalPages - pageRangeToShow - 1) {
+
+        
+
+                                            pages.push('...');
+
+        
+
+                                        }
+
+        
+
+                                        
+
+        
+
+                                        if (!pages.includes(totalPages)) {
+
+        
+
+                                            pages.push(totalPages);
+
+        
+
+                                        }
+
+        
+
+                                    }
+
+        
+
+                                    
+
+        
+
+                                    // Renderizar los botones de página
+
+        
+
+                                    pages.forEach(page => {
+
+        
+
+                                        if (page === '...') {
+
+        
+
+                                            paginationControls.appendChild(createEllipsis());
+
+        
+
+                                        } else {
+
+        
+
+                                            paginationControls.appendChild(createPageButton(page, page, false, page === currentPage));
+
+        
+
+                                        }
+
+        
+
+                                    });
+
+        
+
+                
+
+        
+
+                                    // Botón "Siguiente"
+
+        
+
+                                    paginationControls.appendChild(createPageButton('Siguiente', currentPage + 1, currentPage === totalPages));
+
+        
+
+                                }
 
         
 
